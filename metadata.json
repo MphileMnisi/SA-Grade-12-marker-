@@ -1,0 +1,5 @@
+{
+  "name": "SA Grade 12 Script Marker",
+  "description": "An AI-powered tool for South African teachers to automatically mark Grade 12 learner scripts. Upload a script, and the system will analyze the answers, generate marks, and provide feedback.",
+  "requestFramePermissions": []
+}

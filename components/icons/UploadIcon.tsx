@@ -1,0 +1,19 @@
+
+import React from 'react';
+
+export const UploadIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    className={className}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V21h18v-3.75M3.75 14.25c0-6.21 5.04-11.25 11.25-11.25s11.25 5.04 11.25 11.25v.75M3.75 14.25H20.25"
+    />
+  </svg>
+);
