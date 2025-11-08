@@ -11,3 +11,9 @@ export interface MarkingResult {
   overallFeedback: string;
   questions: QuestionResult[];
 }
+
+export interface SchoolUser {
+    schoolName: string;
+    emisNumber: string;
+    password: string;
+}
