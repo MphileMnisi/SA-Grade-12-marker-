@@ -3,6 +3,8 @@ import { MarkingResult } from '../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { DownloadIcon } from './icons/DownloadIcon';
+import JSZip from 'jszip';
+
 
 interface ResultsDisplayProps {
   results: Array<{ 
@@ -10,8 +12,6 @@ interface ResultsDisplayProps {
     result: MarkingResult | null; 
     error?: string 
   }>;
-  questionPaperPreviewUrl: string;
-  questionPaperFileType: string;
 }
 
 const ScoreCard: React.FC<{ title: string; value: string; className?: string }> = ({ title, value, className }) => (
@@ -20,20 +20,6 @@ const ScoreCard: React.FC<{ title: string; value: string; className?: string }> 
     <p className="text-3xl font-bold text-slate-800">{value}</p>
   </div>
 );
-
-const FilePreview: React.FC<{ url: string; fileType: string; alt: string }> = ({ url, fileType, alt }) => {
-  if (fileType.startsWith('image/')) {
-    return <img src={url} alt={alt} className="rounded-md w-full" />;
-  }
-  if (fileType === 'application/pdf') {
-    return <embed src={url} type="application/pdf" className="rounded-md w-full h-[70vh]" />;
-  }
-  return (
-    <div className="flex items-center justify-center h-48 bg-slate-100 rounded-lg">
-      <p className="text-slate-500">Unsupported file type: {fileType}</p>
-    </div>
-  );
-};
 
 const getPercentageColor = (p: number) => {
     if (p >= 80) return 'text-emerald-500';
@@ -121,7 +107,7 @@ const IndividualResultCard: React.FC<{
                 {isExporting ? 'Exporting...' : 'Export PDF'}
             </button>
         </div>
-        <div id={elementId} className="space-y-6 bg-white">
+        <div id={elementId} className="space-y-6 bg-white p-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ScoreCard title="Score" value={`${result.marksAwarded} / ${result.totalMarksAvailable}`} />
                 <ScoreCard title="Percentage" value={`${percentage}%`} className={getPercentageColor(Number(percentage))} />
@@ -152,25 +138,97 @@ const IndividualResultCard: React.FC<{
 };
 
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, questionPaperPreviewUrl, questionPaperFileType }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
+  const [isZipping, setIsZipping] = useState(false);
+
+  const handleDownloadAll = async () => {
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+
+      const pdfPromises = results.map(async (item, index) => {
+        if (!item.result || item.error) return null;
+
+        const element = document.getElementById(`result-card-to-export-${index}`);
+        if (!element) return null;
+
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgRatio = imgProps.height / imgProps.width;
+        
+        let imgWidth = pdfWidth - 20;
+        let imgHeight = imgWidth * imgRatio;
+
+        if (imgHeight > pdfHeight - 20) {
+            imgHeight = pdfHeight - 20;
+            imgWidth = imgHeight / imgRatio;
+        }
+        
+        const x = (pdfWidth - imgWidth) / 2;
+        const y = 10;
+        
+        pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+        
+        const pdfBlob = pdf.output('blob');
+        const fileName = `${item.scriptFile.name.replace(/\.[^/.]+$/, "")}-results.pdf`;
+        
+        return { fileName, pdfBlob };
+      });
+
+      const generatedPdfs = (await Promise.all(pdfPromises)).filter(p => p !== null) as { fileName: string, pdfBlob: Blob }[];
+
+      if (generatedPdfs.length === 0) {
+        alert("No successful results to download.");
+        return;
+      }
+
+      for (const pdfData of generatedPdfs) {
+        zip.file(pdfData.fileName, pdfData.pdfBlob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = 'All-Script-Results.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+    } catch (error) {
+      console.error("Failed to create ZIP archive:", error);
+      alert("Sorry, there was an error creating the ZIP file. Please try again.");
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8">
-      <details className="bg-white p-4 rounded-lg shadow-md border border-slate-200 group">
-        <summary className="text-xl font-semibold text-slate-800 cursor-pointer list-none flex justify-between items-center">
-          <span>View Question Paper</span>
-          <span className="text-indigo-600 transition-transform duration-200 group-open:rotate-180">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </span>
-        </summary>
-        <div className="mt-4 pt-4 border-t border-slate-200">
-          <FilePreview url={questionPaperPreviewUrl} fileType={questionPaperFileType} alt="Question Paper Preview" />
-        </div>
-      </details>
-      
+       <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-slate-800">
+            Marking Results ({results.length} {results.length === 1 ? 'Script' : 'Scripts'})
+        </h2>
+        {results.some(r => r.result && !r.error) && (
+          <button
+            onClick={handleDownloadAll}
+            disabled={isZipping}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-wait transition-colors"
+          >
+            <DownloadIcon className="w-5 h-5" />
+            {isZipping ? 'Zipping...' : 'Download All Results'}
+          </button>
+        )}
+      </div>
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-slate-800">Marking Results ({results.length} {results.length === 1 ? 'Script' : 'Scripts'})</h2>
         {results.map((item, index) => (
           <IndividualResultCard key={index} item={item} index={index} />
         ))}

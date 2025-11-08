@@ -111,16 +111,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!questionPaperFile) {
-      if (questionPaperPreviewUrl) {
-        URL.revokeObjectURL(questionPaperPreviewUrl);
-        setQuestionPaperPreviewUrl(null);
-      }
+      setQuestionPaperPreviewUrl(null);
       return;
     }
-    const objectUrl = URL.createObjectURL(questionPaperFile);
-    setQuestionPaperPreviewUrl(objectUrl);
 
-    return () => URL.revokeObjectURL(objectUrl);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setQuestionPaperPreviewUrl(reader.result as string);
+    };
+    reader.readAsDataURL(questionPaperFile);
   }, [questionPaperFile]);
 
   const handleQuestionPaperSelect = useCallback((files: File[]) => {
@@ -280,12 +279,10 @@ const App: React.FC = () => {
                 Try Again
               </button>
             </div>
-          ) : markingResults.length > 0 && questionPaperPreviewUrl && questionPaperFile ? (
+          ) : markingResults.length > 0 ? (
             <div>
               <ResultsDisplay 
                 results={markingResults}
-                questionPaperPreviewUrl={questionPaperPreviewUrl} 
-                questionPaperFileType={questionPaperFile.type}
               />
               <div className="text-center mt-8">
                 <button
