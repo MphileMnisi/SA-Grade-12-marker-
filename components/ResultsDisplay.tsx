@@ -5,142 +5,175 @@ import html2canvas from 'html2canvas';
 import { DownloadIcon } from './icons/DownloadIcon';
 
 interface ResultsDisplayProps {
-  result: MarkingResult;
-  scriptPreviewUrl: string;
+  results: Array<{ 
+    scriptFile: File; 
+    result: MarkingResult | null; 
+    error?: string 
+  }>;
+  questionPaperPreviewUrl: string;
+  questionPaperFileType: string;
 }
 
 const ScoreCard: React.FC<{ title: string; value: string; className?: string }> = ({ title, value, className }) => (
-  <div className={`bg-slate-100 dark:bg-slate-700 p-4 rounded-lg text-center ${className}`}>
-    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-    <p className="text-3xl font-bold text-slate-800 dark:text-slate-100">{value}</p>
+  <div className={`bg-slate-100 p-4 rounded-lg text-center ${className}`}>
+    <p className="text-sm font-medium text-slate-500">{title}</p>
+    <p className="text-3xl font-bold text-slate-800">{value}</p>
   </div>
 );
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, scriptPreviewUrl }) => {
+const FilePreview: React.FC<{ url: string; fileType: string; alt: string }> = ({ url, fileType, alt }) => {
+  if (fileType.startsWith('image/')) {
+    return <img src={url} alt={alt} className="rounded-md w-full" />;
+  }
+  if (fileType === 'application/pdf') {
+    return <embed src={url} type="application/pdf" className="rounded-md w-full h-[70vh]" />;
+  }
+  return (
+    <div className="flex items-center justify-center h-48 bg-slate-100 rounded-lg">
+      <p className="text-slate-500">Unsupported file type: {fileType}</p>
+    </div>
+  );
+};
+
+const getPercentageColor = (p: number) => {
+    if (p >= 80) return 'text-emerald-500';
+    if (p >= 50) return 'text-amber-500';
+    return 'text-red-500';
+};
+
+
+const IndividualResultCard: React.FC<{
+  item: { scriptFile: File; result: MarkingResult | null; error?: string };
+  index: number;
+}> = ({ item, index }) => {
+  const { scriptFile, result, error } = item;
   const [isExporting, setIsExporting] = useState(false);
+  const elementId = `result-card-to-export-${index}`;
 
   const handleExportPDF = async () => {
-    const resultsElement = document.getElementById('results-to-export');
+    const resultsElement = document.getElementById(elementId);
     if (!resultsElement) {
         console.error("Could not find element to export.");
         return;
     }
     setIsExporting(true);
 
-    // Force light mode styles for a print-friendly PDF
-    const wasDarkMode = document.documentElement.classList.contains('dark');
-    if (wasDarkMode) {
-      document.documentElement.classList.remove('dark');
-    }
-
     try {
-        // Allow time for styles to update before capturing
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        const canvas = await html2canvas(resultsElement, {
-            scale: 2, // Higher scale for better quality
-            useCORS: true,
-        });
+        const canvas = await html2canvas(resultsElement, { scale: 2, useCORS: true });
         
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-        });
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         const imgProps = pdf.getImageProperties(imgData);
         const imgRatio = imgProps.height / imgProps.width;
         
-        let imgWidth = pdfWidth - 20; // 10mm margin on each side
+        let imgWidth = pdfWidth - 20;
         let imgHeight = imgWidth * imgRatio;
 
-        // If the content is taller than the page, scale it down to fit.
         if (imgHeight > pdfHeight - 20) {
             imgHeight = pdfHeight - 20;
             imgWidth = imgHeight / imgRatio;
         }
 
-        const x = (pdfWidth - imgWidth) / 2; // Center the image horizontally
-        const y = 10; // 10mm top margin
+        const x = (pdfWidth - imgWidth) / 2;
+        const y = 10;
 
         pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-        pdf.save('script-marking-results.pdf');
+        pdf.save(`${scriptFile.name.replace(/\.[^/.]+$/, "")}-results.pdf`);
 
     } catch (error) {
         console.error("Failed to export PDF:", error);
         alert("Sorry, there was an error creating the PDF. Please try again.");
     } finally {
-        // Restore dark mode if it was enabled
-        if (wasDarkMode) {
-            document.documentElement.classList.add('dark');
-        }
         setIsExporting(false);
     }
   };
 
+  if (error) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-red-500">
+        <h4 className="font-bold text-slate-800 truncate">{scriptFile.name}</h4>
+        <p className="text-red-600 mt-2 font-medium">Error: {error}</p>
+      </div>
+    );
+  }
+
+  if (!result) return null;
 
   const percentage = result.totalMarksAvailable > 0
     ? ((result.marksAwarded / result.totalMarksAvailable) * 100).toFixed(1)
-    : 0;
-
-  const getPercentageColor = (p: number) => {
-    if (p >= 80) return 'text-emerald-500';
-    if (p >= 50) return 'text-amber-500';
-    return 'text-red-500';
-  };
+    : "0";
 
   return (
-    <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-8">
-      <div className="lg:col-span-2">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Submitted Script</h2>
-        <div className="bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md">
-            <img src={scriptPreviewUrl} alt="Submitted script" className="rounded-md w-full" />
-        </div>
-      </div>
-      <div className="lg:col-span-3">
-        <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Marking Results</h2>
+    <div className="bg-white p-6 rounded-lg shadow-md transition-shadow hover:shadow-xl">
+        <div className="flex justify-between items-start mb-4">
+            <h4 className="text-xl font-bold text-slate-800 truncate pr-4">{scriptFile.name}</h4>
             <button
                 onClick={handleExportPDF}
                 disabled={isExporting}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-wait transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-wait transition-colors flex-shrink-0"
             >
                 <DownloadIcon className="w-5 h-5" />
                 {isExporting ? 'Exporting...' : 'Export PDF'}
             </button>
         </div>
-        
-        <div id="results-to-export" className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div id={elementId} className="space-y-6 bg-white">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ScoreCard title="Score" value={`${result.marksAwarded} / ${result.totalMarksAvailable}`} />
                 <ScoreCard title="Percentage" value={`${percentage}%`} className={getPercentageColor(Number(percentage))} />
             </div>
-
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-md">
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">Overall Feedback</h3>
-                <p className="text-slate-600 dark:text-slate-300">{result.overallFeedback}</p>
+            <div className="bg-slate-50 p-4 rounded-lg">
+                <h3 className="text-md font-semibold text-slate-700 mb-2">Overall Feedback</h3>
+                <p className="text-slate-600 text-sm">{result.overallFeedback}</p>
             </div>
-
             <div>
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-3">Question Breakdown</h3>
-                <div className="space-y-4">
+                <h3 className="text-md font-semibold text-slate-700 mb-3">Question Breakdown</h3>
+                <div className="space-y-3">
                     {result.questions.map((q, index) => (
-                    <div key={index} className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md transition hover:shadow-lg">
-                        <div className="flex justify-between items-center mb-2">
-                        <p className="font-bold text-slate-700 dark:text-slate-200">Question {q.questionNumber}</p>
-                        <p className="font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 rounded-full text-sm">
-                            {q.marksAwarded} / {q.maxMarks}
-                        </p>
+                    <div key={index} className="bg-slate-50 p-3 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                            <p className="font-bold text-slate-700 text-sm">Question {q.questionNumber}</p>
+                            <p className="font-semibold text-indigo-600 bg-indigo-100 px-2.5 py-0.5 rounded-full text-xs">
+                                {q.marksAwarded} / {q.maxMarks}
+                            </p>
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-300">{q.feedback}</p>
+                        <p className="text-xs text-slate-600">{q.feedback}</p>
                     </div>
                     ))}
                 </div>
             </div>
         </div>
+    </div>
+  );
+};
+
+
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, questionPaperPreviewUrl, questionPaperFileType }) => {
+  return (
+    <div className="w-full max-w-4xl mx-auto space-y-8">
+      <details className="bg-white p-4 rounded-lg shadow-md border border-slate-200 group">
+        <summary className="text-xl font-semibold text-slate-800 cursor-pointer list-none flex justify-between items-center">
+          <span>View Question Paper</span>
+          <span className="text-indigo-600 transition-transform duration-200 group-open:rotate-180">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
+        </summary>
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <FilePreview url={questionPaperPreviewUrl} fileType={questionPaperFileType} alt="Question Paper Preview" />
+        </div>
+      </details>
+      
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-slate-800">Marking Results ({results.length} {results.length === 1 ? 'Script' : 'Scripts'})</h2>
+        {results.map((item, index) => (
+          <IndividualResultCard key={index} item={item} index={index} />
+        ))}
       </div>
     </div>
   );

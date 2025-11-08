@@ -1,25 +1,60 @@
-
 import React, { useCallback, useState } from 'react';
 import { UploadIcon } from './icons/UploadIcon';
 
 interface FileUploadProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (files: File[]) => void;
   disabled: boolean;
+  promptText: React.ReactNode;
+  multiple?: boolean;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }) => {
+// Define constants for validation
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const SUPPORTED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+
+
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled, promptText, multiple = false }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const validateAndSelectFiles = (files: FileList | null) => {
+    setUploadError(null);
+    if (!files || files.length === 0) return;
+
+    const selectedFiles = Array.from(files);
+    const validationErrors: string[] = [];
+
+    for (const file of selectedFiles) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        validationErrors.push(`'${file.name}' is too large (max ${MAX_FILE_SIZE_MB}MB).`);
+      }
+      if (!SUPPORTED_MIME_TYPES.includes(file.type)) {
+        validationErrors.push(`'${file.name}' has an unsupported type.`);
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      setUploadError(validationErrors.join(' '));
+      return;
+    }
+
+    onFileSelect(selectedFiles);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      onFileSelect(e.target.files[0]);
-    }
+    validateAndSelectFiles(e.target.files);
+     // Reset the input value to allow re-selecting the same file(s)
+    e.target.value = '';
   };
 
   const handleDragEnter = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!disabled) setIsDragging(true);
+    if (!disabled) {
+      setUploadError(null);
+      setIsDragging(true);
+    }
   }, [disabled]);
 
   const handleDragLeave = useCallback((e: React.DragEvent<HTMLLabelElement>) => {
@@ -37,13 +72,27 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    if (!disabled && e.dataTransfer.files && e.dataTransfer.files[0]) {
-      onFileSelect(e.dataTransfer.files[0]);
+    if (!disabled) {
+      validateAndSelectFiles(e.dataTransfer.files);
     }
   }, [disabled, onFileSelect]);
 
-  const dragClasses = isDragging ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300 dark:border-slate-600';
-  const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
+  const hasError = uploadError !== null;
+  const borderClasses = hasError 
+    ? 'border-red-500' 
+    : isDragging 
+    ? 'border-indigo-600' 
+    : 'border-slate-300';
+    
+  const backgroundClasses = hasError 
+    ? 'bg-red-50' 
+    : isDragging 
+    ? 'bg-indigo-50' 
+    : 'bg-white';
+    
+  const interactionClasses = disabled 
+    ? 'opacity-50 cursor-not-allowed' 
+    : 'cursor-pointer hover:border-slate-400';
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -52,22 +101,29 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        className={`flex justify-center w-full h-48 px-4 transition bg-white dark:bg-slate-800 border-2 ${dragClasses} border-dashed rounded-md appearance-none ${disabledClasses}`}
+        className={`flex justify-center w-full h-48 px-4 transition ${backgroundClasses} border-2 ${borderClasses} border-dashed rounded-md appearance-none ${interactionClasses}`}
       >
-        <span className="flex items-center space-x-2">
-          <UploadIcon className="w-8 h-8 text-slate-500 dark:text-slate-400" />
-          <span className="font-medium text-slate-600 dark:text-slate-300">
-            Drop script image here, or{' '}
-            <span className="text-indigo-600 dark:text-indigo-400 underline">browse</span>
-          </span>
+        <span className="flex items-center space-x-2 text-center">
+            {hasError ? (
+                <span className="font-medium text-red-600">{uploadError}</span>
+            ) : (
+                <>
+                    <UploadIcon className="w-8 h-8 text-slate-500" />
+                    <span className="font-medium text-slate-600">
+                        {promptText}
+                        <span className="text-indigo-600 underline">browse</span>
+                    </span>
+                </>
+            )}
         </span>
         <input
           type="file"
           name="file_upload"
           className="hidden"
-          accept="image/png, image/jpeg, image/webp"
+          accept="image/png, image/jpeg, image/webp, application/pdf"
           onChange={handleFileChange}
           disabled={disabled}
+          multiple={multiple}
         />
       </label>
     </div>

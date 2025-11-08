@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const messages = [
@@ -30,7 +29,7 @@ export const Loader: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center space-y-4 p-8">
       <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-indigo-600"></div>
-      <p className="text-lg font-medium text-slate-700 dark:text-slate-200 text-center transition-opacity duration-500">{message}</p>
+      <p className="text-lg font-medium text-slate-700 text-center transition-opacity duration-500">{message}</p>
     </div>
   );
 };
