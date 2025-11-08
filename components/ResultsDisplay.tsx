@@ -46,8 +46,12 @@ const IndividualResultCard: React.FC<{
 
     try {
         await new Promise(resolve => setTimeout(resolve, 100));
-
-        const canvas = await html2canvas(resultsElement, { scale: 2, useCORS: true });
+        
+        const canvas = await html2canvas(resultsElement, { 
+            scale: 2, 
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        });
         
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -95,7 +99,7 @@ const IndividualResultCard: React.FC<{
     : "0";
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md transition-shadow hover:shadow-xl">
+    <div className="bg-white p-6 rounded-lg shadow-md transition-shadow hover:shadow-xl border border-slate-200">
         <div className="flex justify-between items-start mb-4">
             <h4 className="text-xl font-bold text-slate-800 truncate pr-4">{scriptFile.name}</h4>
             <button
@@ -107,7 +111,7 @@ const IndividualResultCard: React.FC<{
                 {isExporting ? 'Exporting...' : 'Export PDF'}
             </button>
         </div>
-        <div id={elementId} className="space-y-6 bg-white p-2">
+        <div id={elementId} className="space-y-6 bg-white p-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ScoreCard title="Score" value={`${result.marksAwarded} / ${result.totalMarksAvailable}`} />
                 <ScoreCard title="Percentage" value={`${percentage}%`} className={getPercentageColor(Number(percentage))} />
@@ -154,7 +158,11 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
 
         await new Promise(resolve => setTimeout(resolve, 50));
 
-        const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+        const canvas = await html2canvas(element, { 
+            scale: 2, 
+            useCORS: true,
+            backgroundColor: '#ffffff' 
+        });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         

@@ -2,7 +2,9 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { Loader } from './components/Loader';
 import { ResultsDisplay } from './components/ResultsDisplay';
+import { MemoManager } from './components/CalibrationManager';
 import { markScript } from './services/geminiService';
+import { Stepper } from './components/Stepper';
 import type { MarkingResult } from './types';
 
 const PdfPreviewThumbnail: React.FC<{ file: File }> = ({ file }) => {
@@ -101,13 +103,20 @@ interface BatchResult {
   error?: string;
 }
 
+interface ScriptFileWithPreview {
+  file: File;
+  url: string;
+}
+
 const App: React.FC = () => {
   const [questionPaperFile, setQuestionPaperFile] = useState<File | null>(null);
-  const [scriptFiles, setScriptFiles] = useState<File[]>([]);
+  const [scriptFiles, setScriptFiles] = useState<ScriptFileWithPreview[]>([]);
   const [questionPaperPreviewUrl, setQuestionPaperPreviewUrl] = useState<string | null>(null);
+  const [memoFile, setMemoFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [markingResults, setMarkingResults] = useState<BatchResult[]>([]);
+  const [currentStep, setCurrentStep] = useState(1);
 
   useEffect(() => {
     if (!questionPaperFile) {
@@ -128,18 +137,41 @@ const App: React.FC = () => {
     setError(null);
   }, []);
 
-  const handleScriptSelect = useCallback((files: File[]) => {
-    setScriptFiles(files);
+  const handleScriptSelect = useCallback(async (files: File[]) => {
     setMarkingResults([]);
     setError(null);
+
+    if (files.length === 0) {
+        setScriptFiles([]);
+        return;
+    }
+    
+    try {
+        const previewPromises = files.map(file => {
+            return new Promise<ScriptFileWithPreview>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve({ file, url: reader.result as string });
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        });
+        const filesWithUrls = await Promise.all(previewPromises);
+        setScriptFiles(filesWithUrls);
+    } catch (err) {
+        console.error("Error generating file previews:", err);
+        setError("Could not generate previews for some files. Please try again.");
+        setScriptFiles([]);
+    }
   }, []);
 
   const handleReset = () => {
     setQuestionPaperFile(null);
     setScriptFiles([]);
     setMarkingResults([]);
+    setMemoFile(null);
     setError(null);
     setIsLoading(false);
+    setCurrentStep(1);
   };
 
   const handleMarkScript = async () => {
@@ -150,11 +182,11 @@ const App: React.FC = () => {
     setMarkingResults([]);
 
     try {
-      const promises = scriptFiles.map(scriptFile => markScript(questionPaperFile, scriptFile));
+      const promises = scriptFiles.map(item => markScript(questionPaperFile, item.file, memoFile));
       const settledResults = await Promise.allSettled(promises);
 
       const newResults: BatchResult[] = settledResults.map((res, index) => {
-        const scriptFile = scriptFiles[index];
+        const scriptFile = scriptFiles[index].file;
         if (res.status === 'fulfilled') {
           return { scriptFile, result: res.value, error: undefined };
         } else {
@@ -172,84 +204,130 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   };
+  
+  const stepComponents = {
+    1: ( // Step 1: Upload Question Paper
+      <div className="w-full flex flex-col items-center text-center">
+        <h3 className="text-xl font-semibold mb-4 text-slate-700">
+          Upload Question Paper
+        </h3>
+        {!questionPaperFile || !questionPaperPreviewUrl ? (
+          <FileUpload 
+            onFileSelect={handleQuestionPaperSelect} 
+            disabled={isLoading}
+            promptText={<span>Drop <strong>Question Paper</strong> here, or </span>}
+          />
+        ) : (
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="border-4 border-slate-200 rounded-lg p-1 mb-4 h-48 flex">
+              <UploadPreview file={questionPaperFile} url={questionPaperPreviewUrl} />
+            </div>
+            <button
+              onClick={() => setQuestionPaperFile(null)}
+              className="px-6 py-2 bg-slate-500 text-white font-bold rounded-lg shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-75"
+            >
+              Change Question Paper
+            </button>
+          </div>
+        )}
+      </div>
+    ),
+    2: ( // Step 2: Upload Memo
+      <div className="w-full max-w-4xl mx-auto">
+         <div className="text-center">
+              <h3 className="text-xl font-semibold mb-4 text-slate-700">
+              Upload a Memo
+              </h3>
+              <p className="text-sm text-slate-500 max-w-2xl mx-auto mb-4">
+                  Upload the marking memo for the AI to use as a reference. This helps improve marking accuracy.
+              </p>
+         </div>
+        <MemoManager 
+          memoFile={memoFile}
+          onMemoFileSelect={setMemoFile}
+          disabled={isLoading}
+        />
+      </div>
+    ),
+    3: ( // Step 3: Upload Answer Sheets
+      <div className="w-full flex flex-col items-center text-center">
+        <h3 className="text-xl font-semibold mb-4 text-slate-700">
+          Upload Answer Sheets
+        </h3>
+        {scriptFiles.length === 0 ? (
+          <FileUpload 
+            onFileSelect={handleScriptSelect} 
+            disabled={isLoading}
+            promptText={<span>Drop one or more <strong>Answer Sheets</strong> here, or </span>}
+            multiple={true}
+          />
+        ) : (
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="border-4 border-slate-200 rounded-lg p-2 mb-4 h-48">
+              <div className="h-full overflow-y-auto pr-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {scriptFiles.map((item, index) => (
+                  <div key={index} className="relative aspect-square bg-slate-100 rounded-md overflow-hidden group">
+                     <UploadPreview file={item.file} url={item.url} />
+                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 text-center truncate transition-opacity opacity-0 group-hover:opacity-100" title={item.file.name}>
+                      {item.file.name}
+                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setScriptFiles([])}
+              className="px-6 py-2 bg-slate-500 text-white font-bold rounded-lg shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-75"
+            >
+              Clear All Scripts
+            </button>
+          </div>
+        )}
+      </div>
+    ),
+  };
 
   const renderUploadState = () => (
     <div className="flex flex-col items-center">
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Question Paper Column */}
-        <div className="flex flex-col items-center text-center">
-          <h3 className="text-xl font-semibold mb-4 text-slate-700">
-            1. Upload Question Paper
-          </h3>
-          {!questionPaperFile || !questionPaperPreviewUrl ? (
-            <FileUpload 
-              onFileSelect={handleQuestionPaperSelect} 
-              disabled={isLoading}
-              promptText={<span>Drop <strong>Question Paper</strong> here, or </span>}
+        <div className="w-full max-w-4xl mb-12">
+            <Stepper 
+                currentStep={currentStep}
+                steps={['Question Paper', 'Marking Memo', 'Answer Sheets']}
             />
-          ) : (
-            <div className="w-full max-w-md">
-              <div className="border-4 border-slate-200 rounded-lg p-1 mb-4 h-48 flex">
-                <UploadPreview file={questionPaperFile} url={questionPaperPreviewUrl} />
-              </div>
-              <button
-                onClick={() => setQuestionPaperFile(null)}
-                className="px-6 py-2 bg-slate-500 text-white font-bold rounded-lg shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-75"
-              >
-                Change Question Paper
-              </button>
-            </div>
-          )}
+        </div>
+        
+        <div className="w-full">
+            {stepComponents[currentStep as keyof typeof stepComponents]}
         </div>
 
-        {/* Answer Sheet Column */}
-        <div className="flex flex-col items-center text-center">
-          <h3 className="text-xl font-semibold mb-4 text-slate-700">
-            2. Upload Answer Sheets
-          </h3>
-          {scriptFiles.length === 0 ? (
-            <FileUpload 
-              onFileSelect={handleScriptSelect} 
-              disabled={isLoading || !questionPaperFile}
-              promptText={<span>Drop one or more <strong>Answer Sheets</strong> here, or </span>}
-              multiple={true}
-            />
-          ) : (
-            <div className="w-full max-w-md">
-              <div className="border-4 border-slate-200 rounded-lg p-2 mb-4 h-48">
-                <div className="h-full overflow-y-auto pr-2">
-                  {scriptFiles.map((file, index) => (
-                    <div key={index} className="flex items-center bg-slate-100 rounded p-2 mb-2 text-left">
-                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                        </svg>
-                       <p className="font-medium text-slate-700 text-sm truncate flex-grow" title={file.name}>{file.name}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <button
-                onClick={() => setScriptFiles([])}
-                className="px-6 py-2 bg-slate-500 text-white font-bold rounded-lg shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-75"
-              >
-                Clear All Scripts
-              </button>
-            </div>
-          )}
+        <div className="mt-12 pt-8 border-t border-slate-200 w-full flex justify-center gap-4">
+           {currentStep > 1 && (
+                <button
+                    onClick={() => setCurrentStep(s => s - 1)}
+                    className="px-8 py-3 bg-slate-500 text-white text-lg font-bold rounded-lg shadow-md hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-75 disabled:opacity-50"
+                >
+                    Back
+                </button>
+           )}
+           {currentStep < 3 && (
+               <button
+                    onClick={() => setCurrentStep(s => s + 1)}
+                    disabled={!questionPaperFile}
+                    className="px-8 py-3 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Next
+                </button>
+           )}
+           {currentStep === 3 && (
+                 <button
+                    onClick={handleMarkScript}
+                    disabled={isLoading || scriptFiles.length === 0}
+                    className="px-10 py-4 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-wait transition-transform transform hover:scale-105"
+                >
+                    Mark {scriptFiles.length} {scriptFiles.length === 1 ? 'Script' : 'Scripts'} Now
+                </button>
+           )}
         </div>
-      </div>
-      
-      {questionPaperFile && scriptFiles.length > 0 && (
-        <div className="mt-10">
-          <button
-            onClick={handleMarkScript}
-            disabled={isLoading}
-            className="px-10 py-4 bg-indigo-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-wait transition-transform transform hover:scale-105"
-          >
-            Mark {scriptFiles.length} {scriptFiles.length === 1 ? 'Script' : 'Scripts'} Now
-          </button>
-        </div>
-      )}
     </div>
   );
 
@@ -258,6 +336,11 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50/80 backdrop-blur-sm text-slate-900 p-4 sm:p-6 lg:p-8">
       <main className="container mx-auto">
         <header className="relative text-center mb-12">
+          <img 
+            src="https://assitej.org.za/wp-content/uploads/2021/04/RSA-Basic-Education-LOGO.jpg" 
+            alt="Department of Basic Education Logo" 
+            className="h-20 mx-auto mb-6"
+          />
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800">
             SA Grade 12 Script Marker
           </h1>

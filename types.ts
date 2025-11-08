@@ -1,4 +1,3 @@
-
 export interface QuestionResult {
   questionNumber: string;
   marksAwarded: number;
