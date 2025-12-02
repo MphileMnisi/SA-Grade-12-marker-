@@ -15,7 +15,8 @@
     "jspdf": "^2.5.1",
     "html2canvas": "^1.4.1",
     "pdfjs-dist": "4.4.168",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "firebase": "^12.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

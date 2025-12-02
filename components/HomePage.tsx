@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { getSchoolUsers } from '../utils/auth';
+import { loginSchoolUser } from '../utils/auth';
 
 interface HomePageProps {
   onLogin: (schoolName: string, emisNumber: string) => void;
@@ -10,8 +11,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogin, onSwitchToSignup })
   const [emisNumber, setEmisNumber] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmisNumber = emisNumber.trim();
 
@@ -20,14 +22,21 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogin, onSwitchToSignup })
       return;
     }
 
-    const users = getSchoolUsers();
-    const user = users.find(u => u.emisNumber === trimmedEmisNumber);
+    setIsLoggingIn(true);
+    setError('');
 
-    if (user && user.password === password) {
-        setError('');
-        onLogin(user.schoolName, user.emisNumber);
-    } else {
-        setError('Invalid EMIS Number or password.');
+    try {
+        const user = await loginSchoolUser(trimmedEmisNumber, password);
+        if (user) {
+            onLogin(user.schoolName, user.emisNumber);
+        } else {
+            setError('Invalid EMIS Number or password.');
+        }
+    } catch (e) {
+        console.error(e);
+        setError('An error occurred during login. Please try again.');
+    } finally {
+        setIsLoggingIn(false);
     }
   };
 
@@ -60,7 +69,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogin, onSwitchToSignup })
                 required
                 value={emisNumber}
                 onChange={(e) => setEmisNumber(e.target.value)}
-                className="block w-full px-3 py-2 bg-slate-800 text-white placeholder-slate-400 border border-slate-600 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500 sm:text-sm"
+                disabled={isLoggingIn}
+                className="block w-full px-3 py-2 bg-slate-800 text-white placeholder-slate-400 border border-slate-600 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500 sm:text-sm disabled:opacity-50"
               />
             </div>
           </div>
@@ -76,7 +86,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogin, onSwitchToSignup })
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full px-3 py-2 bg-slate-800 text-white placeholder-slate-400 border border-slate-600 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500 sm:text-sm"
+                disabled={isLoggingIn}
+                className="block w-full px-3 py-2 bg-slate-800 text-white placeholder-slate-400 border border-slate-600 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500 sm:text-sm disabled:opacity-50"
               />
             </div>
           </div>
@@ -90,9 +101,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogin, onSwitchToSignup })
           <div>
             <button
               type="submit"
-              className="flex justify-center w-full px-4 py-3 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={isLoggingIn}
+              className="flex justify-center w-full px-4 py-3 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-wait"
             >
-              Login
+              {isLoggingIn ? 'Logging in...' : 'Login'}
             </button>
           </div>
         </form>
