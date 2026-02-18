@@ -5,8 +5,6 @@ import { ResultsDisplay } from './components/ResultsDisplay';
 import { MemoManager } from './components/CalibrationManager';
 import { markScript } from './services/geminiService';
 import { Stepper } from './components/Stepper';
-import { HomePage } from './components/HomePage';
-import { SignUpPage } from './components/SignUpPage';
 import type { MarkingResult } from './types';
 import { Chatbot } from './components/Chatbot';
 
@@ -39,7 +37,7 @@ const PdfPreviewThumbnail: React.FC<{ file: File }> = ({ file }) => {
                     const pdf = await pdfjsLib.getDocument(typedarray).promise;
                     const page = await pdf.getPage(1);
 
-                    const desiredWidth = 300; // Render at a higher resolution for clarity
+                    const desiredWidth = 300; 
                     const viewport = page.getViewport({ scale: 1 });
                     const scale = desiredWidth / viewport.width;
                     const scaledViewport = page.getViewport({ scale });
@@ -111,12 +109,7 @@ interface ScriptFileWithPreview {
   url: string;
 }
 
-type AuthMode = 'signup' | 'login' | 'loggedIn';
-
-
 const App: React.FC = () => {
-  const [authMode, setAuthMode] = useState<AuthMode>('signup');
-  const [schoolInfo, setSchoolInfo] = useState<{name: string, emis: string} | null>(null);
   const [questionPaperFile, setQuestionPaperFile] = useState<File | null>(null);
   const [scriptFiles, setScriptFiles] = useState<ScriptFileWithPreview[]>([]);
   const [questionPaperPreviewUrl, setQuestionPaperPreviewUrl] = useState<string | null>(null);
@@ -181,17 +174,6 @@ const App: React.FC = () => {
     setIsLoading(false);
     setCurrentStep(1);
   };
-  
-  const handleLogin = (name: string, emis: string) => {
-    setSchoolInfo({ name, emis });
-    setAuthMode('loggedIn');
-  };
-  
-  const handleLogout = () => {
-    handleReset();
-    setSchoolInfo(null);
-    setAuthMode('login');
-  };
 
   const handleMarkScript = async () => {
     if (!questionPaperFile || scriptFiles.length === 0) return;
@@ -225,7 +207,7 @@ const App: React.FC = () => {
   };
   
   const stepComponents = {
-    1: ( // Step 1: Upload Question Paper
+    1: (
       <div className="w-full flex flex-col items-center text-center">
         <h3 className="text-xl font-semibold mb-4 text-slate-700">
           Upload Question Paper
@@ -251,7 +233,7 @@ const App: React.FC = () => {
         )}
       </div>
     ),
-    2: ( // Step 2: Upload Memo
+    2: (
       <div className="w-full max-w-4xl mx-auto">
          <div className="text-center">
               <h3 className="text-xl font-semibold mb-4 text-slate-700">
@@ -268,7 +250,7 @@ const App: React.FC = () => {
         />
       </div>
     ),
-    3: ( // Step 3: Upload Answer Sheets
+    3: (
       <div className="w-full flex flex-col items-center text-center">
         <h3 className="text-xl font-semibold mb-4 text-slate-700">
           Upload Answer Sheets
@@ -350,86 +332,59 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderContent = () => {
-    switch (authMode) {
-      case 'signup':
-        return <SignUpPage onSwitchToLogin={() => setAuthMode('login')} />;
-      case 'login':
-        return <HomePage onLogin={handleLogin} onSwitchToSignup={() => setAuthMode('signup')} />;
-      case 'loggedIn':
-        if (!schoolInfo) return null; // Should not happen
-        return (
-          <>
-            <div className="p-4 sm:p-6 lg:p-8">
-              <main className="container mx-auto">
-                <header className="relative text-center mb-12">
-                  <div className="absolute top-0 right-0">
-                    <button
-                      onClick={handleLogout}
-                      className="px-4 py-2 text-sm font-semibold text-indigo-600 bg-indigo-100 rounded-lg hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                  <img
-                    src="https://assitej.org.za/wp-content/uploads/2021/04/RSA-Basic-Education-LOGO.jpg"
-                    alt="Department of Basic Education Logo"
-                    className="h-20 mx-auto mb-6"
-                  />
-                  <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800">
-                    SA Grade 12 Script Marker
-                  </h1>
-                  <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-                    Leverage AI to automatically mark learner scripts and get instant, detailed feedback.
-                  </p>
-                </header>
-
-                <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200">
-                  {isLoading ? (
-                    <Loader />
-                  ) : error ? (
-                    <div className="text-center p-8">
-                      <p className="text-red-500 font-semibold mb-4">{error}</p>
-                      <button
-                        onClick={handleReset}
-                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75"
-                      >
-                        Try Again
-                      </button>
-                    </div>
-                  ) : markingResults.length > 0 ? (
-                    <div>
-                      <ResultsDisplay results={markingResults} />
-                      <div className="text-center mt-8">
-                        <button
-                          onClick={handleReset}
-                          className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75"
-                        >
-                          Mark More Scripts
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    renderUploadState()
-                  )}
-                </div>
-                <footer className="text-center mt-12 text-sm text-slate-500">
-                  <p className="font-semibold">{schoolInfo.name} (EMIS: {schoolInfo.emis})</p>
-                  <p>&copy; {new Date().getFullYear()} AI Script Marker. For educational purposes only.</p>
-                </footer>
-              </main>
-            </div>
-            <Chatbot />
-          </>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50/80 backdrop-blur-sm text-slate-900">
-      {renderContent()}
+        <div className="p-4 sm:p-6 lg:p-8">
+            <main className="container mx-auto">
+            <header className="relative text-center mb-12">
+                <img
+                src="https://assitej.org.za/wp-content/uploads/2021/04/RSA-Basic-Education-LOGO.jpg"
+                alt="Department of Basic Education Logo"
+                className="h-20 mx-auto mb-6"
+                />
+                <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800">
+                SA Grade 12 Script Marker
+                </h1>
+                <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
+                Leverage AI to automatically mark learner scripts and get instant, detailed feedback.
+                </p>
+            </header>
+
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200">
+                {isLoading ? (
+                <Loader />
+                ) : error ? (
+                <div className="text-center p-8">
+                    <p className="text-red-500 font-semibold mb-4">{error}</p>
+                    <button
+                    onClick={handleReset}
+                    className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75"
+                    >
+                    Try Again
+                    </button>
+                </div>
+                ) : markingResults.length > 0 ? (
+                <div>
+                    <ResultsDisplay results={markingResults} />
+                    <div className="text-center mt-8">
+                    <button
+                        onClick={handleReset}
+                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75"
+                    >
+                        Mark More Scripts
+                    </button>
+                    </div>
+                </div>
+                ) : (
+                renderUploadState()
+                )}
+            </div>
+            <footer className="text-center mt-12 text-sm text-slate-500">
+                <p>&copy; {new Date().getFullYear()} SA Grade 12 Script Marker. For educational purposes only.</p>
+            </footer>
+            </main>
+        </div>
+        <Chatbot />
     </div>
   );
 };
